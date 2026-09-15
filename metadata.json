@@ -1,0 +1,6 @@
+{
+  "name": "MY El Oued QR",
+  "description": "المنصة الرقمية الأولى للمحلات والأنشطة التجارية في ولاية الوادي - صفحة أعمال احترافية ورمز QR ديناميكي بهوية صحراوية عصرية.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
