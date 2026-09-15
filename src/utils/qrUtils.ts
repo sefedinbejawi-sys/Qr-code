@@ -227,3 +227,79 @@ export async function generatePrintableStandee(
 
   return canvas.toDataURL('image/png');
 }
+
+export function printQrSheet(store: Store, standeeDataUrl: string) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="utf-8">
+      <title>طباعة لافتة QR - ${store.name} - MY El Oued</title>
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          font-family: system-ui, -apple-system, sans-serif;
+          background: #fff;
+        }
+        .print-container {
+          width: 100%;
+          max-width: 180mm;
+          text-align: center;
+        }
+        img {
+          width: 100%;
+          height: auto;
+          border-radius: 12px;
+        }
+        @media print {
+          .no-print { display: none; }
+        }
+        .btn-print {
+          background: #d97706;
+          color: white;
+          border: none;
+          padding: 12px 28px;
+          border-radius: 8px;
+          font-weight: bold;
+          font-size: 16px;
+          cursor: pointer;
+          margin-bottom: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-top: 20px; text-align: center;">
+        <button class="btn-print" onclick="window.print()">🖨️ طباعة الآن (Print / Save as PDF)</button>
+        <p style="color: #666; font-size: 14px; margin-top: 4px;">جاهز للطباعة بحجم A4 لطاولات المحل أو واجهة الدخول</p>
+      </div>
+      <div class="print-container">
+        <img src="${standeeDataUrl}" alt="Printable Standee" />
+      </div>
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 600);
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+

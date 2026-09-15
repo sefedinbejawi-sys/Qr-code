@@ -1,15 +1,21 @@
-import { Store, User, AnalyticsSummary } from '../types';
+import { Store, User, AnalyticsSummary, PlatformStats } from '../types';
 import { initialSeedStores } from '../data/seedStores';
 
 const API_BASE = '/api';
 
 export const api = {
-  async getStores(params?: { commune?: string; category?: string; search?: string }): Promise<Store[]> {
+  async getStores(params?: {
+    commune?: string;
+    category?: string;
+    search?: string;
+    filter?: string;
+  }): Promise<Store[]> {
     try {
       const query = new URLSearchParams();
       if (params?.commune && params.commune !== 'all') query.set('commune', params.commune);
       if (params?.category && params.category !== 'all') query.set('category', params.category);
       if (params?.search) query.set('search', params.search);
+      if (params?.filter && params.filter !== 'all') query.set('filter', params.filter);
 
       const res = await fetch(`${API_BASE}/stores?${query.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch stores');
@@ -27,8 +33,111 @@ export const api = {
         const q = params.search.toLowerCase();
         list = list.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
       }
+      if (params?.filter === 'offers_only') {
+        list = list.filter((s) => s.offers.some((o) => o.isActive));
+      } else if (params?.filter === 'verified_only') {
+        list = list.filter((s) => s.verified);
+      }
       return list;
     }
+  },
+
+  async getPlatformStats(): Promise<PlatformStats> {
+    try {
+      const res = await fetch(`${API_BASE}/platform/stats`);
+      if (!res.ok) throw new Error('Failed to fetch platform stats');
+      return await res.json();
+    } catch (err) {
+      console.warn('Fallback platform stats:', err);
+      const totalStores = initialSeedStores.length;
+      const totalViews = initialSeedStores.reduce((acc, s) => acc + (s.stats?.totalViews || 0), 0);
+      const totalScans = initialSeedStores.reduce((acc, s) => acc + (s.stats?.totalScans || 0), 0);
+      const totalCalls = initialSeedStores.reduce((acc, s) => acc + (s.stats?.callClicks || 0), 0);
+      const totalWhatsapp = initialSeedStores.reduce((acc, s) => acc + (s.stats?.whatsappClicks || 0), 0);
+      return {
+        totalStores,
+        totalViews,
+        totalScans,
+        totalCalls,
+        totalWhatsapp,
+        totalActiveOffers: initialSeedStores.reduce((acc, s) => acc + (s.offers?.filter((o) => o.isActive).length || 0), 0),
+        communesCount: 5,
+        topCommunes: [
+          { commune: 'الوادي', count: 2 },
+          { commune: 'قمار', count: 1 },
+          { commune: 'كوينين', count: 1 },
+          { commune: 'البياضة', count: 1 },
+          { commune: 'الدبيلة', count: 1 },
+        ],
+      };
+    }
+  },
+
+  async getOffers(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/offers`);
+      if (!res.ok) throw new Error('Failed to fetch offers');
+      return await res.json();
+    } catch (err) {
+      console.warn('Fallback offers:', err);
+      const offers: any[] = [];
+      initialSeedStores.forEach((s) => {
+        s.offers.forEach((o) => {
+          if (o.isActive) {
+            offers.push({
+              ...o,
+              storeId: s.id,
+              storeSlug: s.slug,
+              storeName: s.name,
+              storeLogo: s.logo,
+              storePhone: s.phone,
+              storeWhatsapp: s.whatsapp,
+              commune: s.commune,
+              category: s.category,
+            });
+          }
+        });
+      });
+      return offers;
+    }
+  },
+
+  async getAdminOverview(): Promise<{
+    stats: PlatformStats;
+    stores: Store[];
+    offers: any[];
+    upgradeRequests: any[];
+    recentLogs: any[];
+  }> {
+    const res = await fetch(`${API_BASE}/admin/overview`);
+    if (!res.ok) throw new Error('Failed to fetch admin overview');
+    return await res.json();
+  },
+
+  async updateStoreStatus(
+    id: string,
+    updates: { verified?: boolean; isFeatured?: boolean; plan?: 'free' | 'pro' | 'business' }
+  ): Promise<{ success: boolean; store: Store }> {
+    const res = await fetch(`${API_BASE}/admin/stores/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Failed to update store status');
+    return await res.json();
+  },
+
+  async requestUpgrade(
+    idOrSlug: string,
+    payload: { plan: 'pro' | 'business'; contact?: string; notes?: string }
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/stores/${idOrSlug}/upgrade-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to submit upgrade request');
+    return await res.json();
   },
 
   async getStoreBySlug(slug: string): Promise<Store> {

@@ -13,6 +13,8 @@ import {
   X,
   Sparkles,
   MapPin,
+  Crown,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -25,6 +27,8 @@ interface NavbarProps {
   onLogout: () => void;
   onNavigateHome: () => void;
   onScrollToDirectory: () => void;
+  onScrollToPricing?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,6 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   onNavigateHome,
   onScrollToDirectory,
+  onScrollToPricing,
+  onOpenAdmin,
 }) => {
   const t = translations[lang];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -84,10 +90,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               <MapPin className="w-3.5 h-3.5 text-amber-600" />
               <span>{t.directory}</span>
             </button>
+            {onScrollToPricing && (
+              <button
+                onClick={onScrollToPricing}
+                className="hover:text-amber-700 transition-colors py-1 flex items-center gap-1 text-stone-700"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-600" />
+                <span>باقات الأسعار</span>
+              </button>
+            )}
           </nav>
 
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
+            {onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs"
+                title="لوحة الإدارة المركزية"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>لوحة الإدارة</span>
+              </button>
+            )}
+
             {/* Language Switcher */}
             <div className="relative">
               <button
@@ -213,6 +239,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               <MapPin className="w-4 h-4 text-amber-600" />
               <span>{t.directory}</span>
             </button>
+            {onScrollToPricing && (
+              <button
+                onClick={() => {
+                  onScrollToPricing();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-right px-3 py-2 rounded-xl hover:bg-stone-100 text-sm font-bold text-stone-800 flex items-center gap-2"
+              >
+                <Crown className="w-4 h-4 text-amber-600" />
+                <span>باقات الأسعار</span>
+              </button>
+            )}
+            {onOpenAdmin && (
+              <button
+                onClick={() => {
+                  onOpenAdmin();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-right px-3 py-2 rounded-xl bg-stone-900 text-amber-400 text-sm font-bold flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>لوحة الإدارة المركزية</span>
+              </button>
+            )}
 
             <div className="pt-2 border-t border-stone-100 flex items-center justify-between px-3">
               <span className="text-xs font-bold text-stone-500">اللغة / Langue:</span>

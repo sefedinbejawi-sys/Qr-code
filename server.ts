@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { initialSeedStores } from './src/data/seedStores';
-import { Store, User, ScanLog, AnalyticsSummary } from './src/types';
+import { Store, User, ScanLog, AnalyticsSummary, PlatformStats } from './src/types';
 
 const app = express();
 const PORT = 3000;
@@ -19,10 +19,20 @@ interface DatabaseSchema {
   stores: Store[];
   users: User[];
   logs: ScanLog[];
+  upgradeRequests?: { id: string; storeId: string; plan: string; contact: string; notes?: string; date: string }[];
 }
 
 // Initial demo users
 const initialUsers: User[] = [
+  {
+    id: 'user_admin_00',
+    name: 'مدير منصة MY El Oued',
+    email: 'admin@myeloued.com',
+    phone: '0661003939',
+    storeIds: ['store_el_ghars_01', 'store_cafe_palmeraie_02', 'store_electronics_03'],
+    token: 'token_admin_eloued_super',
+    role: 'admin',
+  },
   {
     id: 'user_merchant_01',
     name: 'أحمد بن عمار السوفي',
@@ -30,6 +40,7 @@ const initialUsers: User[] = [
     phone: '0661348291',
     storeIds: ['store_el_ghars_01'],
     token: 'token_demo_ahmed_souf',
+    role: 'merchant',
   },
   {
     id: 'user_merchant_02',
@@ -38,6 +49,7 @@ const initialUsers: User[] = [
     phone: '0672891140',
     storeIds: ['store_cafe_palmeraie_02'],
     token: 'token_demo_soufiane_guemar',
+    role: 'merchant',
   },
   {
     id: 'user_merchant_03',
@@ -46,6 +58,7 @@ const initialUsers: User[] = [
     phone: '0658994432',
     storeIds: ['store_electronics_03'],
     token: 'token_demo_yacine_tech',
+    role: 'merchant',
   },
 ];
 
@@ -59,6 +72,27 @@ function loadDb(): DatabaseSchema {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed.stores && Array.isArray(parsed.stores)) {
+        // Sync any new seed stores that aren't in the saved DB yet
+        const existingIds = new Set(parsed.stores.map((s: Store) => s.id));
+        let changed = false;
+        for (const seed of initialSeedStores) {
+          if (!existingIds.has(seed.id)) {
+            parsed.stores.push(seed);
+            changed = true;
+          }
+        }
+        // Ensure admin user exists
+        if (!parsed.users || !parsed.users.some((u: User) => u.email === 'admin@myeloued.com')) {
+          parsed.users = [...initialUsers, ...(parsed.users || [])];
+          changed = true;
+        }
+        if (!parsed.upgradeRequests) {
+          parsed.upgradeRequests = [];
+          changed = true;
+        }
+        if (changed) {
+          saveDb(parsed);
+        }
         return parsed;
       }
     }
@@ -105,6 +139,7 @@ function loadDb(): DatabaseSchema {
     stores: initialSeedStores,
     users: initialUsers,
     logs: seedLogs,
+    upgradeRequests: [],
   };
 
   saveDb(initialDb);
@@ -295,9 +330,160 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
   res.json({ user, store: userStore });
 });
 
+// Platform Real Statistics API (No fake counters - fully computed from DB)
+app.get('/api/platform/stats', (req: Request, res: Response) => {
+  const totalStores = db.stores.length;
+  const totalViews = db.stores.reduce((acc, s) => acc + (s.stats?.totalViews || 0), 0);
+  const totalScans = db.stores.reduce((acc, s) => acc + (s.stats?.totalScans || 0), 0);
+  const totalCalls = db.stores.reduce((acc, s) => acc + (s.stats?.callClicks || 0), 0);
+  const totalWhatsapp = db.stores.reduce((acc, s) => acc + (s.stats?.whatsappClicks || 0), 0);
+
+  let totalActiveOffers = 0;
+  db.stores.forEach((s) => {
+    totalActiveOffers += (s.offers || []).filter((o) => o.isActive).length;
+  });
+
+  const communeCounts: Record<string, number> = {};
+  db.stores.forEach((s) => {
+    communeCounts[s.commune] = (communeCounts[s.commune] || 0) + 1;
+  });
+  const topCommunes = Object.entries(communeCounts)
+    .map(([commune, count]) => ({ commune, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const stats: PlatformStats = {
+    totalStores,
+    totalViews,
+    totalScans,
+    totalCalls,
+    totalWhatsapp,
+    totalActiveOffers,
+    communesCount: Object.keys(communeCounts).length,
+    topCommunes,
+  };
+
+  res.json(stats);
+});
+
+// All Active Offers across El Oued
+app.get('/api/offers', (req: Request, res: Response) => {
+  const allOffers: Array<any> = [];
+
+  db.stores.forEach((store) => {
+    (store.offers || []).forEach((offer) => {
+      if (offer.isActive) {
+        allOffers.push({
+          ...offer,
+          storeId: store.id,
+          storeSlug: store.slug,
+          storeName: store.name,
+          storeLogo: store.logo,
+          storePhone: store.phone,
+          storeWhatsapp: store.whatsapp,
+          commune: store.commune,
+          category: store.category,
+        });
+      }
+    });
+  });
+
+  res.json(allOffers);
+});
+
+// Admin Overview & Management API
+app.get('/api/admin/overview', (req: Request, res: Response) => {
+  const totalStores = db.stores.length;
+  const totalViews = db.stores.reduce((acc, s) => acc + (s.stats?.totalViews || 0), 0);
+  const totalScans = db.stores.reduce((acc, s) => acc + (s.stats?.totalScans || 0), 0);
+  const totalCalls = db.stores.reduce((acc, s) => acc + (s.stats?.callClicks || 0), 0);
+  const totalWhatsapp = db.stores.reduce((acc, s) => acc + (s.stats?.whatsappClicks || 0), 0);
+
+  let totalActiveOffers = 0;
+  const allOffers: any[] = [];
+  db.stores.forEach((s) => {
+    (s.offers || []).forEach((o) => {
+      if (o.isActive) {
+        totalActiveOffers++;
+        allOffers.push({ ...o, storeName: s.name, storeSlug: s.slug, commune: s.commune });
+      }
+    });
+  });
+
+  const communeCounts: Record<string, number> = {};
+  db.stores.forEach((s) => {
+    communeCounts[s.commune] = (communeCounts[s.commune] || 0) + 1;
+  });
+
+  res.json({
+    stats: {
+      totalStores,
+      totalViews,
+      totalScans,
+      totalCalls,
+      totalWhatsapp,
+      totalActiveOffers,
+      communesCount: Object.keys(communeCounts).length,
+      topCommunes: Object.entries(communeCounts).map(([commune, count]) => ({ commune, count })),
+    },
+    stores: db.stores,
+    offers: allOffers,
+    upgradeRequests: db.upgradeRequests || [],
+    recentLogs: (db.logs || []).slice(-20).reverse(),
+  });
+});
+
+// Admin Store Status Update (Verify, Feature, Change Plan)
+app.put('/api/admin/stores/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const store = db.stores.find((s) => s.id === id || s.slug === id);
+
+  if (!store) {
+    return res.status(404).json({ error: 'المحل غير موجود' });
+  }
+
+  const { verified, isFeatured, plan } = req.body;
+  if (typeof verified === 'boolean') store.verified = verified;
+  if (typeof isFeatured === 'boolean') store.isFeatured = isFeatured;
+  if (plan && ['free', 'pro', 'business'].includes(plan)) store.plan = plan;
+
+  store.updatedAt = new Date().toISOString();
+  saveDb(db);
+
+  res.json({ success: true, store });
+});
+
+// Merchant Upgrade Request
+app.post('/api/stores/:idOrSlug/upgrade-request', (req: Request, res: Response) => {
+  const { idOrSlug } = req.params;
+  const store = db.stores.find((s) => s.id === idOrSlug || s.slug === idOrSlug);
+
+  if (!store) {
+    return res.status(404).json({ error: 'المحل غير موجود' });
+  }
+
+  const { plan, contact, notes } = req.body;
+  if (!db.upgradeRequests) db.upgradeRequests = [];
+
+  const newRequest = {
+    id: `req_${Date.now()}`,
+    storeId: store.id,
+    storeName: store.name,
+    storeSlug: store.slug,
+    plan: plan || 'pro',
+    contact: contact || store.phone,
+    notes: notes || '',
+    date: new Date().toISOString(),
+  };
+
+  db.upgradeRequests.unshift(newRequest);
+  saveDb(db);
+
+  res.json({ success: true, message: 'تم إرسال طلب الترقية بنجاح إلى إدارة MY El Oued', request: newRequest });
+});
+
 // Stores: List / Directory
 app.get('/api/stores', (req: Request, res: Response) => {
-  const { commune, category, search } = req.query;
+  const { commune, category, search, filter } = req.query;
 
   let results = [...db.stores];
 
@@ -310,15 +496,42 @@ app.get('/api/stores', (req: Request, res: Response) => {
   }
 
   if (search && typeof search === 'string') {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     results = results.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
+        (s.nameFr && s.nameFr.toLowerCase().includes(q)) ||
         s.description.toLowerCase().includes(q) ||
         s.address.toLowerCase().includes(q) ||
-        s.products.some((p) => p.name.toLowerCase().includes(q))
+        s.commune.toLowerCase().includes(q) ||
+        (s.location.landmark && s.location.landmark.toLowerCase().includes(q)) ||
+        s.products.some((p) => p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q))) ||
+        s.offers.some((o) => o.title.toLowerCase().includes(q) || o.description.toLowerCase().includes(q))
     );
   }
+
+  // Filter mode
+  if (filter === 'offers_only') {
+    results = results.filter((s) => (s.offers || []).some((o) => o.isActive));
+  } else if (filter === 'verified_only') {
+    results = results.filter((s) => s.verified);
+  }
+
+  // Default sorting: Featured and Business plans first, then popular
+  results.sort((a, b) => {
+    if (filter === 'newest') {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+    if (filter === 'most_popular') {
+      const scoreA = (a.stats?.totalScans || 0) * 2 + (a.stats?.totalViews || 0);
+      const scoreB = (b.stats?.totalScans || 0) * 2 + (b.stats?.totalViews || 0);
+      return scoreB - scoreA;
+    }
+    // Default smart discovery sort: Featured & Business tier priority, then activity
+    const weightA = (a.isFeatured ? 10000 : 0) + (a.plan === 'business' ? 5000 : a.plan === 'pro' ? 1000 : 0) + (a.stats?.totalScans || 0);
+    const weightB = (b.isFeatured ? 10000 : 0) + (b.plan === 'business' ? 5000 : b.plan === 'pro' ? 1000 : 0) + (b.stats?.totalScans || 0);
+    return weightB - weightA;
+  });
 
   res.json(results);
 });

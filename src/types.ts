@@ -1,4 +1,5 @@
 export type Language = 'ar' | 'fr' | 'en';
+export type PlanTier = 'free' | 'pro' | 'business';
 
 export type StoreCategory = 
   | 'dates' 
@@ -9,7 +10,10 @@ export type StoreCategory =
   | 'health' 
   | 'services' 
   | 'building' 
-  | 'automotive' 
+  | 'automotive'
+  | 'realestate'
+  | 'sweets'
+  | 'hotels'
   | 'other';
 
 export type CommuneElOued =
@@ -56,10 +60,12 @@ export interface StoreOffer {
   badge?: string;
   validUntil?: string;
   isActive: boolean;
+  code?: string;
+  isDailyDeal?: boolean;
 }
 
 export interface QRConfig {
-  frameStyle: 'classic' | 'desert_badge' | 'golden_dune' | 'modern_oasis' | 'scan_here';
+  frameStyle: 'classic' | 'desert_badge' | 'golden_dune' | 'modern_oasis' | 'scan_here' | 'soufi_pattern';
   color: string;
   bgColor: string;
   centerLogo: boolean;
@@ -110,8 +116,9 @@ export interface Store {
   offers: StoreOffer[];
   gallery: string[];
   qrConfig: QRConfig;
-  plan: 'free' | 'pro';
+  plan: 'free' | 'pro' | 'business';
   verified: boolean;
+  isFeatured?: boolean;
   createdAt: string;
   updatedAt: string;
   stats: StoreStats;
@@ -135,6 +142,18 @@ export interface User {
   phone: string;
   storeIds: string[];
   token?: string;
+  role?: 'admin' | 'merchant';
+}
+
+export interface PlatformStats {
+  totalStores: number;
+  totalViews: number;
+  totalScans: number;
+  totalCalls: number;
+  totalWhatsapp: number;
+  totalActiveOffers: number;
+  communesCount: number;
+  topCommunes: { commune: string; count: number }[];
 }
 
 export interface AnalyticsSummary {

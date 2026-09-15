@@ -6,16 +6,18 @@ import { Navbar } from './components/Navbar';
 import { LandingHero } from './components/LandingHero';
 import { InteractiveDemo } from './components/InteractiveDemo';
 import { FeaturesSection } from './components/FeaturesSection';
+import { PricingSection } from './components/PricingSection';
 import { StoreDirectory } from './components/StoreDirectory';
 import { Footer } from './components/Footer';
 import { StorePublicPage } from './components/StorePublicPage';
 import { Dashboard } from './components/Dashboard';
+import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
 import { QrModal } from './components/QrModal';
 
 export function App() {
   const [lang, setLang] = useState<Language>('ar');
-  const [currentView, setCurrentView] = useState<'landing' | 'store' | 'dashboard'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'store' | 'dashboard' | 'admin'>('landing');
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [activeStore, setActiveStore] = useState<Store | null>(null);
 
@@ -106,6 +108,20 @@ export function App() {
     }
   };
 
+  const handleScrollToPricing = () => {
+    if (currentView !== 'landing') {
+      setCurrentView('landing');
+      setActiveSlug(null);
+      setTimeout(() => {
+        const el = document.getElementById('pricing');
+        el?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      const el = document.getElementById('pricing');
+      el?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   // Open Auth modal
   const handleOpenAuth = (mode: 'login' | 'register') => {
     setAuthModalMode(mode);
@@ -147,6 +163,11 @@ export function App() {
           onLogout={handleLogout}
           onNavigateHome={handleNavigateHome}
           onScrollToDirectory={handleScrollToDirectory}
+          onScrollToPricing={handleScrollToPricing}
+          onOpenAdmin={() => {
+            setCurrentView('admin');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         />
       )}
 
@@ -168,6 +189,11 @@ export function App() {
             />
 
             <FeaturesSection lang={lang} />
+
+            <PricingSection
+              lang={lang}
+              onCreateFreeStore={() => handleOpenAuth('register')}
+            />
 
             <StoreDirectory
               lang={lang}
@@ -200,6 +226,15 @@ export function App() {
             onUpdateStore={(updated) => setMerchantStore(updated)}
             onViewPublicPage={handleOpenStore}
             onLogout={handleLogout}
+          />
+        )}
+
+        {/* 4. Central Platform Admin Dashboard */}
+        {currentView === 'admin' && (
+          <AdminDashboard
+            lang={lang}
+            onViewStore={handleOpenStore}
+            onBackToApp={handleNavigateHome}
           />
         )}
       </main>
